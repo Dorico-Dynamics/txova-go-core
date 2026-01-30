@@ -157,10 +157,10 @@ linters:
           - nestif
 
       # Allow package names that shadow stdlib - intentional design choice for txova-go-core
-      - path: context/context\.go
+      - path: context/
         text: "var-naming: avoid package names that conflict with Go standard library"
 
-      - path: errors/errors\.go
+      - path: errors/
         text: "var-naming: avoid package names that conflict with Go standard library"
 
 formatters:
