@@ -33,6 +33,7 @@ type ServerConfig struct {
 	Port            int           `yaml:"port" env:"TXOVA_SERVER_PORT" default:"8080"`
 	ReadTimeout     time.Duration `yaml:"read_timeout" env:"TXOVA_SERVER_READ_TIMEOUT" default:"30s"`
 	WriteTimeout    time.Duration `yaml:"write_timeout" env:"TXOVA_SERVER_WRITE_TIMEOUT" default:"30s"`
+	RequestTimeout  time.Duration `yaml:"request_timeout" env:"TXOVA_SERVER_REQUEST_TIMEOUT" default:"30s"`
 	ShutdownTimeout time.Duration `yaml:"shutdown_timeout" env:"TXOVA_SERVER_SHUTDOWN_TIMEOUT" default:"30s"`
 }
 

@@ -82,7 +82,7 @@ func ConfigFromAppConfig(cfg config.ServerConfig) Config {
 		Port:            cfg.Port,
 		ReadTimeout:     cfg.ReadTimeout,
 		WriteTimeout:    cfg.WriteTimeout,
-		RequestTimeout:  cfg.ReadTimeout,
+		RequestTimeout:  cfg.RequestTimeout,
 		ShutdownTimeout: cfg.ShutdownTimeout,
 		CORSConfig:      DefaultConfig().CORSConfig,
 	}

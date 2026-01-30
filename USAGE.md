@@ -19,12 +19,12 @@ import "github.com/Dorico-Dynamics/txova-go-core/errors"
 
 // Create typed errors
 err := errors.ValidationError("email is required")
-err := errors.NotFound("user not found")
-err := errors.Forbidden("access denied")
-err := errors.InternalError("database connection failed")
+err = errors.NotFound("user not found")
+err = errors.Forbidden("access denied")
+err = errors.InternalError("database connection failed")
 
 // Wrap errors with context
-err := errors.Wrap(errors.CodeInternalError, "failed to create user", dbErr)
+err = errors.Wrap(errors.CodeInternalError, "failed to create user", dbErr)
 
 // Check error types
 if errors.IsNotFound(err) {
