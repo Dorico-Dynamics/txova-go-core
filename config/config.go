@@ -116,7 +116,7 @@ func Load(path string) (*Config, error) {
 
 	// Load from YAML file if provided and exists.
 	if path != "" {
-		data, err := os.ReadFile(path) //nolint:gosec // path is intentionally configurable for config file loading
+		data, err := os.ReadFile(path) // #nosec G304 -- path is intentionally configurable for config file loading
 		if err != nil {
 			if !os.IsNotExist(err) {
 				return nil, fmt.Errorf("reading config file: %w", err)
