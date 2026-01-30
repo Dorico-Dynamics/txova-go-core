@@ -27,7 +27,20 @@ jobs:
     name: Send Slack Notification
     runs-on: ubuntu-latest
     steps:
+      - name: Check webhook configuration
+        id: check
+        env:
+          WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "::warning::Slack webhook URL not configured, skipping notification"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Sanitize inputs
+        if: steps.check.outputs.skip != 'true'
         id: sanitize
         env:
           RAW_STATUS: ${{ inputs.status }}
@@ -43,6 +56,7 @@ jobs:
           echo "triggered_by=$(sanitize "$RAW_TRIGGERED_BY")" >> $GITHUB_OUTPUT
 
       - name: Set notification color and emoji
+        if: steps.check.outputs.skip != 'true'
         id: format
         run: |
           case "${{ steps.sanitize.outputs.status }}" in
@@ -74,6 +88,7 @@ jobs:
           esac
 
       - name: Send Slack notification
+        if: steps.check.outputs.skip != 'true'
         uses: slackapi/slack-github-action@v2.1.0
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
