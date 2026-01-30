@@ -10,8 +10,9 @@ import (
 	"testing"
 	"time"
 
-	txcontext "github.com/Dorico-Dynamics/txova-go-core/context"
 	"github.com/Dorico-Dynamics/txova-go-types/ids"
+
+	txcontext "github.com/Dorico-Dynamics/txova-go-core/context"
 )
 
 func TestMaskPhone(t *testing.T) {
@@ -310,7 +311,7 @@ func TestLoggerWithContext(t *testing.T) {
 	ctx := context.Background()
 	ctx = txcontext.WithRequestID(ctx, "req-123")
 	testUserID := ids.MustNewUserID()
-	ctx = txcontext.WithClaims(ctx, txcontext.UserClaims{UserID: testUserID})
+	ctx = txcontext.WithClaims(ctx, &txcontext.UserClaims{UserID: testUserID})
 	ctx = txcontext.WithCorrelationID(ctx, "corr-789")
 
 	logger.InfoContext(ctx, "test message")

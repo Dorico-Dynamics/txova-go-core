@@ -6,6 +6,7 @@ package app
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -151,8 +152,8 @@ type CloseFunc struct {
 }
 
 // NewCloser creates a new Closer from a function.
-func NewCloser(name string, close func(ctx context.Context) error) Closer {
-	return &CloseFunc{name: name, close: close}
+func NewCloser(name string, closeFn func(ctx context.Context) error) Closer {
+	return &CloseFunc{name: name, close: closeFn}
 }
 
 // Name returns the name of the closer.
@@ -318,7 +319,7 @@ func (a *App) Run() error {
 	var serverErr error
 	if a.server != nil {
 		go func() {
-			if err := a.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			if err := a.server.ListenAndServe(); err != nil && !stderrors.Is(err, http.ErrServerClosed) {
 				serverErr = err
 				a.Shutdown()
 			}
@@ -453,6 +454,12 @@ func (a *App) runWithRecovery(fn func() error) (err error) {
 	return fn()
 }
 
+// Health status constants.
+const (
+	StatusHealthy   = "healthy"
+	StatusUnhealthy = "unhealthy"
+)
+
 // HealthStatus represents the health status of a component.
 type HealthStatus struct {
 	Name    string `json:"name"`
@@ -474,7 +481,7 @@ func (a *App) CheckHealth(ctx context.Context) HealthReport {
 	a.mu.RUnlock()
 
 	report := HealthReport{
-		Status:     "healthy",
+		Status:     StatusHealthy,
 		Components: make([]HealthStatus, 0, len(healthChecks)),
 	}
 
@@ -487,7 +494,7 @@ func (a *App) CheckHealth(ctx context.Context) HealthReport {
 		if err := hc.Check(ctx); err != nil {
 			status.Healthy = false
 			status.Error = err.Error()
-			report.Status = "unhealthy"
+			report.Status = StatusUnhealthy
 		}
 
 		report.Components = append(report.Components, status)

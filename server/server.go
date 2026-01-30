@@ -110,11 +110,11 @@ func New(cfg Config, logger *logging.Logger) *Server {
 
 // setupMiddleware configures the standard middleware chain.
 // Order matters:
-// 1. Request ID injection
-// 2. Panic recovery
-// 3. Structured logging
-// 4. Timeout
-// 5. CORS
+//  1. Request ID injection.
+//  2. Panic recovery.
+//  3. Structured logging.
+//  4. Timeout.
+//  5. CORS.
 func (s *Server) setupMiddleware() {
 	s.router.Use(s.requestIDMiddleware)
 	s.router.Use(s.recoveryMiddleware)

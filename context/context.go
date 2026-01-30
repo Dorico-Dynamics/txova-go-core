@@ -70,12 +70,18 @@ type UserClaims struct {
 }
 
 // IsZero returns true if the claims are empty/unset.
-func (c UserClaims) IsZero() bool {
+func (c *UserClaims) IsZero() bool {
+	if c == nil {
+		return true
+	}
 	return c.UserID.IsZero()
 }
 
 // HasRole checks if the user has the specified role.
-func (c UserClaims) HasRole(role string) bool {
+func (c *UserClaims) HasRole(role string) bool {
+	if c == nil {
+		return false
+	}
 	for _, r := range c.Roles {
 		if r == role {
 			return true
@@ -85,7 +91,10 @@ func (c UserClaims) HasRole(role string) bool {
 }
 
 // HasAnyRole checks if the user has any of the specified roles.
-func (c UserClaims) HasAnyRole(roles ...string) bool {
+func (c *UserClaims) HasAnyRole(roles ...string) bool {
+	if c == nil {
+		return false
+	}
 	for _, role := range roles {
 		if c.HasRole(role) {
 			return true
@@ -95,7 +104,10 @@ func (c UserClaims) HasAnyRole(roles ...string) bool {
 }
 
 // HasAllRoles checks if the user has all of the specified roles.
-func (c UserClaims) HasAllRoles(roles ...string) bool {
+func (c *UserClaims) HasAllRoles(roles ...string) bool {
+	if c == nil {
+		return false
+	}
 	for _, role := range roles {
 		if !c.HasRole(role) {
 			return false
@@ -106,18 +118,18 @@ func (c UserClaims) HasAllRoles(roles ...string) bool {
 
 // Claims retrieves the user claims from the context.
 // Returns a zero UserClaims if no claims are set.
-func Claims(ctx context.Context) UserClaims {
+func Claims(ctx context.Context) *UserClaims {
 	if ctx == nil {
-		return UserClaims{}
+		return &UserClaims{}
 	}
-	if claims, ok := ctx.Value(userClaimsKey).(UserClaims); ok {
+	if claims, ok := ctx.Value(userClaimsKey).(*UserClaims); ok && claims != nil {
 		return claims
 	}
-	return UserClaims{}
+	return &UserClaims{}
 }
 
 // WithClaims returns a new context with the given user claims.
-func WithClaims(ctx context.Context, claims UserClaims) context.Context {
+func WithClaims(ctx context.Context, claims *UserClaims) context.Context {
 	return context.WithValue(ctx, userClaimsKey, claims)
 }
 

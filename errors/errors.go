@@ -16,7 +16,7 @@ type Code string
 // Standard error codes for the Txova platform.
 const (
 	CodeValidationError    Code = "VALIDATION_ERROR"
-	CodeInvalidCredentials Code = "INVALID_CREDENTIALS"
+	CodeInvalidCredentials Code = "INVALID_CREDENTIALS" //nolint:gosec // this is an error code, not credentials
 	CodeTokenExpired       Code = "TOKEN_EXPIRED"
 	CodeTokenInvalid       Code = "TOKEN_INVALID"
 	CodeForbidden          Code = "FORBIDDEN"

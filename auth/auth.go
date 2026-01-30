@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
+	stderrors "errors"
 	"fmt"
 	"time"
 
@@ -25,6 +26,9 @@ const (
 	TokenTypeAccess TokenType = "access"
 	// TokenTypeRefresh is for long-lived refresh tokens.
 	TokenTypeRefresh TokenType = "refresh"
+
+	// defaultIssuer is the default token issuer.
+	defaultIssuer = "txova"
 )
 
 // Claims represents the JWT claims for Txova tokens.
@@ -54,7 +58,7 @@ type Config struct {
 // Note: In production, keys should be loaded from secure storage.
 func DefaultConfig() Config {
 	return Config{
-		Issuer:             "txova",
+		Issuer:             defaultIssuer,
 		AccessTokenExpiry:  24 * time.Hour,
 		RefreshTokenExpiry: 30 * 24 * time.Hour, // 30 days
 	}
@@ -74,7 +78,7 @@ func NewService(cfg Config) (*Service, error) {
 		cfg.PublicKey = &cfg.PrivateKey.PublicKey
 	}
 	if cfg.Issuer == "" {
-		cfg.Issuer = "txova"
+		cfg.Issuer = defaultIssuer
 	}
 	if cfg.AccessTokenExpiry == 0 {
 		cfg.AccessTokenExpiry = 24 * time.Hour
@@ -242,7 +246,7 @@ func (s *Service) RefreshTokens(refreshTokenString string) (*TokenPair, error) {
 
 // isExpiredError checks if the error is due to token expiration.
 func isExpiredError(err error) bool {
-	return err != nil && (err == jwt.ErrTokenExpired ||
+	return err != nil && (stderrors.Is(err, jwt.ErrTokenExpired) ||
 		(err.Error() != "" && contains(err.Error(), "token is expired")))
 }
 

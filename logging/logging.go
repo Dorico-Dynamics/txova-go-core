@@ -186,11 +186,8 @@ func (l *Logger) Slog() *slog.Logger {
 
 // PII masking functions.
 
-// phoneRegex matches Mozambique phone numbers in various formats.
-var phoneRegex = regexp.MustCompile(`(\+258|258)?[- ]?(8[2-7])[- ]?(\d{3})[- ]?(\d{4})`)
-
 // MaskPhone masks a phone number for logging.
-// Example: +258841234567 -> +258****4567
+// Example: +258841234567 -> +258****4567.
 func MaskPhone(phone string) string {
 	if phone == "" {
 		return ""
@@ -226,7 +223,7 @@ func normalizePhone(phone string) string {
 var emailRegex = regexp.MustCompile(`^([^@]+)@(.+)$`)
 
 // MaskEmail masks an email address for logging.
-// Example: test@example.com -> t***@example.com
+// Example: test@example.com -> t***@example.com.
 func MaskEmail(email string) string {
 	if email == "" {
 		return ""
@@ -240,7 +237,7 @@ func MaskEmail(email string) string {
 	localPart := matches[1]
 	domain := matches[2]
 
-	if len(localPart) == 0 {
+	if localPart == "" {
 		return email
 	}
 
@@ -282,7 +279,7 @@ func MaskSensitive(value string) string {
 }
 
 // SafeAttr creates a slog attribute, automatically masking sensitive fields.
-func SafeAttr(key string, value string) slog.Attr {
+func SafeAttr(key, value string) slog.Attr {
 	if IsSensitiveField(key) {
 		return slog.String(key, MaskSensitive(value))
 	}
@@ -290,12 +287,12 @@ func SafeAttr(key string, value string) slog.Attr {
 }
 
 // PhoneAttr creates a masked phone number attribute.
-func PhoneAttr(key string, phone string) slog.Attr {
+func PhoneAttr(key, phone string) slog.Attr {
 	return slog.String(key, MaskPhone(phone))
 }
 
 // EmailAttr creates a masked email attribute.
-func EmailAttr(key string, email string) slog.Attr {
+func EmailAttr(key, email string) slog.Attr {
 	return slog.String(key, MaskEmail(email))
 }
 

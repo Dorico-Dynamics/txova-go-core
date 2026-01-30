@@ -14,6 +14,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const tagValueTrue = "true"
+
 // Config represents the complete application configuration.
 type Config struct {
 	Server        ServerConfig        `yaml:"server"`
@@ -51,7 +53,7 @@ type DatabaseConfig struct {
 }
 
 // DSN returns the PostgreSQL connection string.
-func (d DatabaseConfig) DSN() string {
+func (d *DatabaseConfig) DSN() string {
 	return fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		d.Host, d.Port, d.User, d.Password, d.Name, d.SSLMode,
@@ -114,7 +116,7 @@ func Load(path string) (*Config, error) {
 
 	// Load from YAML file if provided and exists.
 	if path != "" {
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) //nolint:gosec // path is intentionally configurable for config file loading
 		if err != nil {
 			if !os.IsNotExist(err) {
 				return nil, fmt.Errorf("reading config file: %w", err)
@@ -273,8 +275,8 @@ func setFieldValue(v reflect.Value, s string) error {
 
 // resolveSecrets resolves secret references in the config.
 // Supports formats:
-// - ${env:VAR_NAME} - reads from environment variable
-// - ${vault:path/to/secret:key} - placeholder for vault integration
+//   - ${env:VAR_NAME} - reads from environment variable.
+//   - ${vault:path/to/secret:key} - placeholder for vault integration.
 func resolveSecrets(cfg *Config) error {
 	return resolveSecretsInValue(reflect.ValueOf(cfg).Elem())
 }
@@ -367,7 +369,7 @@ func validateValue(v reflect.Value, prefix string, missing *[]string) {
 		}
 
 		// Check required tag.
-		if field.Tag.Get("required") == "true" {
+		if field.Tag.Get("required") == tagValueTrue {
 			if isZero(fieldValue) {
 				*missing = append(*missing, fieldName)
 			}
@@ -407,7 +409,7 @@ func isSensitiveField(t reflect.Type, fieldPath string) bool {
 		}
 
 		if i == len(parts)-1 {
-			return field.Tag.Get("sensitive") == "true"
+			return field.Tag.Get("sensitive") == tagValueTrue
 		}
 
 		if field.Type.Kind() == reflect.Struct {
@@ -441,7 +443,7 @@ func collectSensitiveFields(t reflect.Type, prefix string, fields *[]string) {
 			continue
 		}
 
-		if field.Tag.Get("sensitive") == "true" {
+		if field.Tag.Get("sensitive") == tagValueTrue {
 			*fields = append(*fields, fieldName)
 		}
 	}

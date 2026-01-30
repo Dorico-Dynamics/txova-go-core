@@ -47,7 +47,7 @@ func (h *HealthHandler) ReadinessHandler() http.HandlerFunc {
 		report := h.app.CheckHealth(ctx)
 
 		status := http.StatusOK
-		if report.Status != "healthy" {
+		if report.Status != StatusHealthy {
 			status = http.StatusServiceUnavailable
 		}
 
@@ -88,7 +88,7 @@ func (h *HealthHandler) HealthHandler() http.HandlerFunc {
 		resp.App.State = h.app.State().String()
 
 		status := http.StatusOK
-		if report.Status != "healthy" || h.app.State() != StateRunning {
+		if report.Status != StatusHealthy || h.app.State() != StateRunning {
 			status = http.StatusServiceUnavailable
 		}
 

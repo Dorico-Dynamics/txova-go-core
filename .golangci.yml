@@ -44,7 +44,6 @@ linters:
     - rowserrcheck
     - sqlclosecheck
     - stylecheck
-    - tenv
     - testableexamples
     - thelper
     - tparallel
@@ -135,6 +134,31 @@ issues:
         - goconst
         - gosec
         - unparam
+        - errcheck
+        - gocyclo
+        - gochecknoinits
+        - errorlint
 
     - path: _test\.go
       text: "fieldalignment"
+
+    - path: _test\.go
+      text: "httpNoBody"
+
+    - path: _test\.go
+      text: "elseif"
+
+    - path: _test\.go
+      linters:
+        - intrange
+        - nestif
+
+    # Allow nested if blocks in config loading - it's naturally nested logic
+    - path: config/config\.go
+      linters:
+        - nestif
+
+    # Allow nested if blocks in CORS middleware - it's naturally nested logic
+    - path: server/middleware\.go
+      linters:
+        - nestif

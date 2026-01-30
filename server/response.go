@@ -9,6 +9,8 @@ import (
 	"github.com/Dorico-Dynamics/txova-go-core/errors"
 )
 
+const internalErrorMessage = "an internal error occurred"
+
 // Response represents a standard API response envelope.
 type Response struct {
 	Data  any            `json:"data,omitempty"`
@@ -53,7 +55,7 @@ func WriteJSON(w http.ResponseWriter, r *http.Request, status int, data any) {
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp) //nolint:errcheck // can't handle encoding errors after headers written
 }
 
 // WriteJSONWithPagination writes a successful JSON response with pagination metadata.
@@ -72,11 +74,11 @@ func WriteJSONWithPagination(w http.ResponseWriter, r *http.Request, status int,
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp) //nolint:errcheck // can't handle encoding errors after headers written
 }
 
 // WriteError writes an error response with the standard envelope.
-func WriteError(w http.ResponseWriter, status int, code string, message string) {
+func WriteError(w http.ResponseWriter, status int, code, message string) {
 	resp := Response{
 		Error: &ErrorResponse{
 			Code:    code,
@@ -86,7 +88,7 @@ func WriteError(w http.ResponseWriter, status int, code string, message string) 
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp) //nolint:errcheck // can't handle encoding errors after headers written
 }
 
 // WriteAppError writes an AppError as a JSON response.
@@ -104,7 +106,7 @@ func WriteAppError(w http.ResponseWriter, r *http.Request, err *errors.AppError)
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(err.HTTPStatus())
-	_ = json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp) //nolint:errcheck // can't handle encoding errors after headers written
 }
 
 // HandleError writes any error as a JSON response.
@@ -117,14 +119,14 @@ func HandleError(w http.ResponseWriter, r *http.Request, err error) {
 	}
 
 	// Generic internal error - don't expose details.
-	WriteAppError(w, r, errors.InternalError("an internal error occurred"))
+	WriteAppError(w, r, errors.InternalError(internalErrorMessage))
 }
 
 // safeErrorMessage returns the error message, sanitizing internal errors.
 func safeErrorMessage(err *errors.AppError) string {
 	// Never expose internal error details to clients.
 	if err.Code() == errors.CodeInternalError {
-		return "an internal error occurred"
+		return internalErrorMessage
 	}
 	return err.Message()
 }
@@ -171,7 +173,7 @@ func Conflict(w http.ResponseWriter, r *http.Request, message string) {
 
 // InternalError writes a 500 Internal Server Error response.
 func InternalError(w http.ResponseWriter, r *http.Request) {
-	WriteAppError(w, r, errors.InternalError("an internal error occurred"))
+	WriteAppError(w, r, errors.InternalError(internalErrorMessage))
 }
 
 // DecodeJSON decodes a JSON request body into the provided struct.

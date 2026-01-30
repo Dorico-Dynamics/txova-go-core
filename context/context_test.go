@@ -108,22 +108,27 @@ func TestUserClaims_IsZero(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		claims   UserClaims
+		claims   *UserClaims
 		expected bool
 	}{
 		{
+			name:     "nil claims",
+			claims:   nil,
+			expected: true,
+		},
+		{
 			name:     "zero claims",
-			claims:   UserClaims{},
+			claims:   &UserClaims{},
 			expected: true,
 		},
 		{
 			name:     "with user ID",
-			claims:   UserClaims{UserID: testUserID},
+			claims:   &UserClaims{UserID: testUserID},
 			expected: false,
 		},
 		{
 			name:     "with only roles",
-			claims:   UserClaims{Roles: []string{"admin"}},
+			claims:   &UserClaims{Roles: []string{"admin"}},
 			expected: true,
 		},
 	}
@@ -141,7 +146,7 @@ func TestUserClaims_IsZero(t *testing.T) {
 func TestUserClaims_HasRole(t *testing.T) {
 	t.Parallel()
 
-	claims := UserClaims{
+	claims := &UserClaims{
 		UserID: ids.MustNewUserID(),
 		Roles:  []string{"rider", "premium"},
 	}
@@ -170,7 +175,7 @@ func TestUserClaims_HasRole(t *testing.T) {
 func TestUserClaims_HasAnyRole(t *testing.T) {
 	t.Parallel()
 
-	claims := UserClaims{
+	claims := &UserClaims{
 		UserID: ids.MustNewUserID(),
 		Roles:  []string{"rider", "premium"},
 	}
@@ -199,7 +204,7 @@ func TestUserClaims_HasAnyRole(t *testing.T) {
 func TestUserClaims_HasAllRoles(t *testing.T) {
 	t.Parallel()
 
-	claims := UserClaims{
+	claims := &UserClaims{
 		UserID: ids.MustNewUserID(),
 		Roles:  []string{"rider", "premium", "verified"},
 	}
@@ -231,7 +236,7 @@ func TestClaims(t *testing.T) {
 
 	now := time.Now()
 	testUserID := ids.MustNewUserID()
-	testClaims := UserClaims{
+	testClaims := &UserClaims{
 		UserID:    testUserID,
 		UserType:  enums.UserTypeRider,
 		Roles:     []string{"rider"},
@@ -244,19 +249,19 @@ func TestClaims(t *testing.T) {
 		name     string
 		ctx      context.Context
 		setup    func(context.Context) context.Context
-		expected UserClaims
+		expected *UserClaims
 	}{
 		{
 			name:     "nil context",
 			ctx:      nil,
 			setup:    func(ctx context.Context) context.Context { return ctx },
-			expected: UserClaims{},
+			expected: &UserClaims{},
 		},
 		{
 			name:     "empty context",
 			ctx:      context.Background(),
 			setup:    func(ctx context.Context) context.Context { return ctx },
-			expected: UserClaims{},
+			expected: &UserClaims{},
 		},
 		{
 			name:     "with claims",
@@ -286,7 +291,7 @@ func TestUserID(t *testing.T) {
 
 	testUserID := ids.MustNewUserID()
 	ctx := context.Background()
-	claims := UserClaims{UserID: testUserID}
+	claims := &UserClaims{UserID: testUserID}
 	ctxWithClaims := WithClaims(ctx, claims)
 
 	if got := UserID(ctx); !got.IsZero() {
@@ -302,7 +307,7 @@ func TestUserIDString(t *testing.T) {
 
 	testUserID := ids.MustNewUserID()
 	ctx := context.Background()
-	claims := UserClaims{UserID: testUserID}
+	claims := &UserClaims{UserID: testUserID}
 	ctxWithClaims := WithClaims(ctx, claims)
 
 	if got := UserIDString(ctx); got != "" {
@@ -317,7 +322,7 @@ func TestUserType(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	claims := UserClaims{UserID: ids.MustNewUserID(), UserType: enums.UserTypeDriver}
+	claims := &UserClaims{UserID: ids.MustNewUserID(), UserType: enums.UserTypeDriver}
 	ctxWithClaims := WithClaims(ctx, claims)
 
 	if got := UserType(ctx); got != "" {
@@ -350,12 +355,12 @@ func TestIsAuthenticated(t *testing.T) {
 		},
 		{
 			name:     "with empty claims",
-			ctx:      WithClaims(context.Background(), UserClaims{}),
+			ctx:      WithClaims(context.Background(), &UserClaims{}),
 			expected: false,
 		},
 		{
 			name:     "with valid claims",
-			ctx:      WithClaims(context.Background(), UserClaims{UserID: testUserID}),
+			ctx:      WithClaims(context.Background(), &UserClaims{UserID: testUserID}),
 			expected: true,
 		},
 	}
@@ -446,7 +451,7 @@ func TestContextChaining(t *testing.T) {
 	ctx := context.Background()
 	ctx = WithRequestID(ctx, "req-123")
 	ctx = WithCorrelationID(ctx, "corr-456")
-	ctx = WithClaims(ctx, UserClaims{UserID: testUserID, UserType: enums.UserTypeRider})
+	ctx = WithClaims(ctx, &UserClaims{UserID: testUserID, UserType: enums.UserTypeRider})
 
 	if got := RequestID(ctx); got != "req-123" {
 		t.Errorf("RequestID() = %v, want req-123", got)
@@ -465,7 +470,7 @@ func TestContextChaining(t *testing.T) {
 func TestUserClaimsWithNoRoles(t *testing.T) {
 	t.Parallel()
 
-	claims := UserClaims{
+	claims := &UserClaims{
 		UserID: ids.MustNewUserID(),
 		Roles:  nil,
 	}
