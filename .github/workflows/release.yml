@@ -232,12 +232,12 @@ jobs:
           git push origin ${{ needs.version.outputs.new_version }}
 
       - name: Create Release
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ needs.version.outputs.new_version }}
-          release_name: txova-go-core ${{ needs.version.outputs.new_version }}
+          name: txova-go-core ${{ needs.version.outputs.new_version }}
           body_path: release_notes.md
           draft: false
           prerelease: false

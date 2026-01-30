@@ -4,22 +4,22 @@ on:
   workflow_call:
     inputs:
       status:
-        description: 'Notification status (STARTED, SUCCESS, FAILURE, CANCELLED)'
+        description: "Notification status (STARTED, SUCCESS, FAILURE, CANCELLED)"
         required: true
         type: string
       version:
-        description: 'Release version'
+        description: "Release version"
         required: false
         type: string
-        default: ''
+        default: ""
       triggered_by:
-        description: 'User who triggered the workflow'
+        description: "User who triggered the workflow"
         required: false
         type: string
-        default: ''
+        default: ""
     secrets:
       SLACK_WEBHOOK_URL:
-        description: 'Slack webhook URL for notifications'
+        description: "Slack webhook URL for notifications"
         required: true
 
 jobs:
@@ -29,14 +29,18 @@ jobs:
     steps:
       - name: Sanitize inputs
         id: sanitize
+        env:
+          RAW_STATUS: ${{ inputs.status }}
+          RAW_VERSION: ${{ inputs.version }}
+          RAW_TRIGGERED_BY: ${{ inputs.triggered_by }}
         run: |
           sanitize() {
-            echo "$1" | jq -Rs '.' | sed 's/^"//;s/"$//'
+            printf '%s' "$1" | jq -Rs '.' | sed 's/^"//;s/"$//'
           }
 
-          echo "status=$(sanitize '${{ inputs.status }}')" >> $GITHUB_OUTPUT
-          echo "version=$(sanitize '${{ inputs.version }}')" >> $GITHUB_OUTPUT
-          echo "triggered_by=$(sanitize '${{ inputs.triggered_by }}')" >> $GITHUB_OUTPUT
+          echo "status=$(sanitize "$RAW_STATUS")" >> $GITHUB_OUTPUT
+          echo "version=$(sanitize "$RAW_VERSION")" >> $GITHUB_OUTPUT
+          echo "triggered_by=$(sanitize "$RAW_TRIGGERED_BY")" >> $GITHUB_OUTPUT
 
       - name: Set notification color and emoji
         id: format

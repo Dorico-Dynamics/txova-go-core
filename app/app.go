@@ -223,8 +223,23 @@ func WithCloser(closer Closer) Option {
 
 // New creates a new App with the given configuration and options.
 func New(cfg Config, opts ...Option) *App {
+	// Start with defaults and overlay provided config.
+	mergedCfg := DefaultConfig()
+	if cfg.Name != "" {
+		mergedCfg.Name = cfg.Name
+	}
+	if cfg.Version != "" {
+		mergedCfg.Version = cfg.Version
+	}
+	if cfg.ShutdownTimeout != 0 {
+		mergedCfg.ShutdownTimeout = cfg.ShutdownTimeout
+	}
+	if cfg.StartupTimeout != 0 {
+		mergedCfg.StartupTimeout = cfg.StartupTimeout
+	}
+
 	a := &App{
-		config:       cfg,
+		config:       mergedCfg,
 		shutdownCh:   make(chan struct{}),
 		doneCh:       make(chan struct{}),
 		signalNotify: signal.Notify,
@@ -253,10 +268,16 @@ func (a *App) IsReady() bool {
 		return false
 	}
 
+	// Copy health checks slice under lock to avoid data race with RegisterHealthCheck.
+	a.mu.RLock()
+	healthChecks := make([]HealthChecker, len(a.healthChecks))
+	copy(healthChecks, a.healthChecks)
+	a.mu.RUnlock()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	for _, hc := range a.healthChecks {
+	for _, hc := range healthChecks {
 		if err := hc.Check(ctx); err != nil {
 			return false
 		}
