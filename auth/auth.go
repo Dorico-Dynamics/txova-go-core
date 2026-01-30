@@ -87,6 +87,14 @@ func NewService(cfg Config) (*Service, error) {
 		cfg.RefreshTokenExpiry = 30 * 24 * time.Hour
 	}
 
+	// Validate durations are positive.
+	if cfg.AccessTokenExpiry < 0 {
+		return nil, fmt.Errorf("access token expiry must be positive")
+	}
+	if cfg.RefreshTokenExpiry < 0 {
+		return nil, fmt.Errorf("refresh token expiry must be positive")
+	}
+
 	return &Service{config: cfg}, nil
 }
 

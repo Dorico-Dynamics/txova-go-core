@@ -84,6 +84,28 @@ func TestNewService(t *testing.T) {
 			t.Errorf("default refresh expiry = %v, want 720h", svc.config.RefreshTokenExpiry)
 		}
 	})
+
+	t.Run("negative access token expiry rejected", func(t *testing.T) {
+		t.Parallel()
+		_, err := NewService(Config{
+			PrivateKey:        testKeyPair.private,
+			AccessTokenExpiry: -1 * time.Hour,
+		})
+		if err == nil {
+			t.Fatal("NewService() should fail with negative access token expiry")
+		}
+	})
+
+	t.Run("negative refresh token expiry rejected", func(t *testing.T) {
+		t.Parallel()
+		_, err := NewService(Config{
+			PrivateKey:         testKeyPair.private,
+			RefreshTokenExpiry: -1 * time.Hour,
+		})
+		if err == nil {
+			t.Fatal("NewService() should fail with negative refresh token expiry")
+		}
+	})
 }
 
 func TestGenerateTokenPair(t *testing.T) {
@@ -421,8 +443,8 @@ func TestExtractBearerToken(t *testing.T) {
 	}{
 		{
 			name:      "valid bearer token",
-			header:    "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.test",
-			wantToken: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.test",
+			header:    "Bearer test-token-value-abc123",
+			wantToken: "test-token-value-abc123",
 			wantErr:   false,
 		},
 		{

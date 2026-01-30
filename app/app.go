@@ -327,6 +327,7 @@ func (a *App) Run() error {
 	// Initialize dependencies.
 	if err := a.initialize(); err != nil {
 		a.state.Store(int32(StateStopped))
+		close(a.doneCh) // Ensure Done() callers don't hang on init failure.
 		return err
 	}
 
@@ -336,12 +337,12 @@ func (a *App) Run() error {
 		"version", a.config.Version,
 	)
 
-	// Start the server if configured.
-	var serverErr error
+	// Use a buffered channel to avoid race condition when reading server errors.
+	serverErrCh := make(chan error, 1)
 	if a.server != nil {
 		go func() {
 			if err := a.server.ListenAndServe(); err != nil && !stderrors.Is(err, http.ErrServerClosed) {
-				serverErr = err
+				serverErrCh <- err
 				a.Shutdown()
 			}
 		}()
@@ -360,11 +361,13 @@ func (a *App) Run() error {
 		return err
 	}
 
-	if serverErr != nil {
+	// Check for server error after shutdown completes.
+	select {
+	case serverErr := <-serverErrCh:
 		return errors.Wrap(errors.CodeInternalError, "server error", serverErr)
+	default:
+		return nil
 	}
-
-	return nil
 }
 
 // Shutdown initiates graceful shutdown of the application.
