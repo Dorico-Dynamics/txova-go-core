@@ -227,7 +227,8 @@ jobs:
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
-          git remote set-url origin https://github-actions[bot]:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
+          # Use gh CLI to configure git authentication without exposing token in URL
+          gh auth setup-git
           git tag -a ${{ needs.version.outputs.new_version }} -m "Release ${{ needs.version.outputs.new_version }}"
           git push origin ${{ needs.version.outputs.new_version }}
 
