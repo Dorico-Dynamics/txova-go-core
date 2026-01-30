@@ -30,7 +30,7 @@ jobs:
       - name: Check webhook configuration
         id: check
         env:
-          WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_TXOVA }}
+          WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           if [ -z "$WEBHOOK_URL" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
@@ -91,7 +91,7 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         uses: slackapi/slack-github-action@v2.1.0
         with:
-          webhook: ${{ secrets.SLACK_WEBHOOK_TXOVA }}
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload: |
             {
