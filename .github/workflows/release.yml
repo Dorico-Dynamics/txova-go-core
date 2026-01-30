@@ -124,24 +124,28 @@ jobs:
 
           IFS='.' read -r major minor patch <<< "$latest_version"
 
-          commits=$(git log ${{ steps.latest_tag.outputs.latest_tag }}..HEAD --pretty=format:"%s")
+          # Use %B for full commit message (subject + body) to detect BREAKING CHANGE in body
+          # Use null separator to handle multi-line commit messages
+          commits=$(git log ${{ steps.latest_tag.outputs.latest_tag }}..HEAD --pretty=format:"%B%x00")
 
           # Determine highest bump level: 0=none, 1=patch, 2=minor, 3=major
           bump_level=0
 
-          while IFS= read -r commit; do
+          while IFS= read -r -d $'\0' commit; do
+            # Get the first line (subject) for pattern matching
+            subject=$(echo "$commit" | head -n1)
             # Check for breaking changes using Conventional Commits format:
-            # - "BREAKING CHANGE:" anywhere in commit
-            # - "feat!:" or "fix!:" or "type(scope)!:" format
+            # - "BREAKING CHANGE:" anywhere in full commit message (subject or body)
+            # - "feat!:" or "fix!:" or "type(scope)!:" format in subject
             breaking_pattern='^[a-z]+(\([^)]+\))?!:'
-            if [[ "$commit" == *"BREAKING CHANGE:"* ]] || [[ "$commit" =~ $breaking_pattern ]]; then
+            if [[ "$commit" == *"BREAKING CHANGE:"* ]] || [[ "$subject" =~ $breaking_pattern ]]; then
               bump_level=3
               break  # Major is highest, no need to continue
-            elif [[ "$commit" == feat:* ]] || [[ "$commit" == feat\(* ]]; then
+            elif [[ "$subject" == feat:* ]] || [[ "$subject" == feat\(* ]]; then
               if [ $bump_level -lt 2 ]; then
                 bump_level=2
               fi
-            elif [[ "$commit" == fix:* ]] || [[ "$commit" == fix\(* ]]; then
+            elif [[ "$subject" == fix:* ]] || [[ "$subject" == fix\(* ]]; then
               if [ $bump_level -lt 1 ]; then
                 bump_level=1
               fi
