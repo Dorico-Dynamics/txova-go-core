@@ -1,7 +1,9 @@
 package auth
 
 import (
+	"context"
 	"crypto/rsa"
+	"sync"
 	"testing"
 	"time"
 
@@ -528,13 +530,265 @@ func TestTokenUniqueIDs(t *testing.T) {
 	userID := ids.MustNewUserID()
 
 	// Generate multiple tokens and verify they have unique IDs.
-	ids := make(map[string]bool)
+	tokenIDs := make(map[string]bool)
 	for range 10 {
 		token, _ := svc.GenerateAccessToken(userID, enums.UserTypeRider, nil)
 		claims, _ := svc.ValidateToken(token)
-		if ids[claims.ID] {
+		if tokenIDs[claims.ID] {
 			t.Errorf("duplicate token ID: %s", claims.ID)
 		}
-		ids[claims.ID] = true
+		tokenIDs[claims.ID] = true
+	}
+}
+
+// mockBlacklist is an in-memory implementation of TokenBlacklist for testing.
+type mockBlacklist struct {
+	mu           sync.RWMutex
+	revokedIDs   map[string]time.Time
+	revokedUsers map[string]time.Time // userID -> revocation time
+}
+
+func newMockBlacklist() *mockBlacklist {
+	return &mockBlacklist{
+		revokedIDs:   make(map[string]time.Time),
+		revokedUsers: make(map[string]time.Time),
+	}
+}
+
+func (m *mockBlacklist) IsRevoked(ctx context.Context, tokenID string) (bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	_, exists := m.revokedIDs[tokenID]
+	return exists, nil
+}
+
+func (m *mockBlacklist) Revoke(ctx context.Context, tokenID string, expiresAt time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.revokedIDs[tokenID] = expiresAt
+	return nil
+}
+
+func (m *mockBlacklist) RevokeAllForUser(ctx context.Context, userID ids.UserID) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.revokedUsers[userID.String()] = time.Now()
+	return nil
+}
+
+func newTestServiceWithBlacklist(t *testing.T, blacklist TokenBlacklist) *ServiceWithBlacklist {
+	t.Helper()
+	svc, err := NewServiceWithBlacklist(Config{
+		PrivateKey:         testKeyPair.private,
+		PublicKey:          testKeyPair.public,
+		Issuer:             "test-issuer",
+		AccessTokenExpiry:  1 * time.Hour,
+		RefreshTokenExpiry: 24 * time.Hour,
+	}, blacklist)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	return svc
+}
+
+func TestNewServiceWithBlacklist(t *testing.T) {
+	t.Parallel()
+
+	blacklist := newMockBlacklist()
+	svc, err := NewServiceWithBlacklist(Config{
+		PrivateKey: testKeyPair.private,
+	}, blacklist)
+	if err != nil {
+		t.Fatalf("NewServiceWithBlacklist() error = %v", err)
+	}
+	if svc == nil {
+		t.Fatal("NewServiceWithBlacklist() returned nil")
+	}
+	if svc.blacklist != blacklist {
+		t.Error("blacklist not set correctly")
+	}
+}
+
+func TestServiceWithBlacklist_ValidateToken(t *testing.T) {
+	t.Parallel()
+
+	blacklist := newMockBlacklist()
+	svc := newTestServiceWithBlacklist(t, blacklist)
+	userID := ids.MustNewUserID()
+	ctx := context.Background()
+
+	t.Run("valid token not revoked", func(t *testing.T) {
+		t.Parallel()
+		token, _ := svc.GenerateAccessToken(userID, enums.UserTypeRider, nil)
+		claims, err := svc.ValidateToken(ctx, token)
+		if err != nil {
+			t.Fatalf("ValidateToken() error = %v", err)
+		}
+		if claims.UserID != userID {
+			t.Errorf("UserID = %v, want %v", claims.UserID, userID)
+		}
+	})
+
+	t.Run("revoked token rejected", func(t *testing.T) {
+		t.Parallel()
+		token, _ := svc.GenerateAccessToken(userID, enums.UserTypeRider, nil)
+		claims, _ := svc.Service.ValidateToken(token)
+
+		// Revoke the token.
+		_ = blacklist.Revoke(ctx, claims.ID, claims.ExpiresAt.Time)
+
+		// Try to validate - should fail.
+		_, err := svc.ValidateToken(ctx, token)
+		if err == nil {
+			t.Fatal("ValidateToken() should fail for revoked token")
+		}
+		if !errors.IsUnauthorized(err) {
+			t.Errorf("error should be unauthorized, got: %v", err)
+		}
+	})
+}
+
+func TestServiceWithBlacklist_ValidateAccessToken(t *testing.T) {
+	t.Parallel()
+
+	blacklist := newMockBlacklist()
+	svc := newTestServiceWithBlacklist(t, blacklist)
+	userID := ids.MustNewUserID()
+	ctx := context.Background()
+
+	token, _ := svc.GenerateAccessToken(userID, enums.UserTypeRider, nil)
+	claims, err := svc.ValidateAccessToken(ctx, token)
+	if err != nil {
+		t.Fatalf("ValidateAccessToken() error = %v", err)
+	}
+	if claims.TokenType != TokenTypeAccess {
+		t.Errorf("TokenType = %v, want %v", claims.TokenType, TokenTypeAccess)
+	}
+}
+
+func TestServiceWithBlacklist_ValidateRefreshToken(t *testing.T) {
+	t.Parallel()
+
+	blacklist := newMockBlacklist()
+	svc := newTestServiceWithBlacklist(t, blacklist)
+	userID := ids.MustNewUserID()
+	ctx := context.Background()
+
+	token, _ := svc.GenerateRefreshToken(userID, enums.UserTypeRider, nil)
+	claims, err := svc.ValidateRefreshToken(ctx, token)
+	if err != nil {
+		t.Fatalf("ValidateRefreshToken() error = %v", err)
+	}
+	if claims.TokenType != TokenTypeRefresh {
+		t.Errorf("TokenType = %v, want %v", claims.TokenType, TokenTypeRefresh)
+	}
+}
+
+func TestServiceWithBlacklist_RefreshTokens(t *testing.T) {
+	t.Parallel()
+
+	blacklist := newMockBlacklist()
+	svc := newTestServiceWithBlacklist(t, blacklist)
+	userID := ids.MustNewUserID()
+	ctx := context.Background()
+
+	// Generate initial refresh token.
+	refreshToken, _ := svc.GenerateRefreshToken(userID, enums.UserTypeRider, []string{"rider"})
+	oldClaims, _ := svc.Service.ValidateToken(refreshToken)
+
+	// Refresh tokens.
+	newPair, err := svc.RefreshTokens(ctx, refreshToken)
+	if err != nil {
+		t.Fatalf("RefreshTokens() error = %v", err)
+	}
+
+	// Verify old refresh token is revoked.
+	revoked, _ := blacklist.IsRevoked(ctx, oldClaims.ID)
+	if !revoked {
+		t.Error("old refresh token should be revoked after refresh")
+	}
+
+	// Verify new tokens work.
+	_, err = svc.ValidateAccessToken(ctx, newPair.AccessToken)
+	if err != nil {
+		t.Fatalf("new access token should be valid: %v", err)
+	}
+}
+
+func TestServiceWithBlacklist_RevokeToken(t *testing.T) {
+	t.Parallel()
+
+	blacklist := newMockBlacklist()
+	svc := newTestServiceWithBlacklist(t, blacklist)
+	userID := ids.MustNewUserID()
+	ctx := context.Background()
+
+	token, _ := svc.GenerateAccessToken(userID, enums.UserTypeRider, nil)
+
+	// Revoke the token.
+	err := svc.RevokeToken(ctx, token)
+	if err != nil {
+		t.Fatalf("RevokeToken() error = %v", err)
+	}
+
+	// Verify token is now invalid.
+	_, err = svc.ValidateToken(ctx, token)
+	if err == nil {
+		t.Fatal("ValidateToken() should fail for revoked token")
+	}
+}
+
+func TestServiceWithBlacklist_RevokeAllUserTokens(t *testing.T) {
+	t.Parallel()
+
+	blacklist := newMockBlacklist()
+	svc := newTestServiceWithBlacklist(t, blacklist)
+	userID := ids.MustNewUserID()
+	ctx := context.Background()
+
+	err := svc.RevokeAllUserTokens(ctx, userID)
+	if err != nil {
+		t.Fatalf("RevokeAllUserTokens() error = %v", err)
+	}
+
+	// Verify user is in revoked users map.
+	blacklist.mu.RLock()
+	_, exists := blacklist.revokedUsers[userID.String()]
+	blacklist.mu.RUnlock()
+	if !exists {
+		t.Error("user should be in revoked users map")
+	}
+}
+
+func TestServiceWithBlacklist_NilBlacklist(t *testing.T) {
+	t.Parallel()
+
+	// Create service without blacklist.
+	svc, err := NewServiceWithBlacklist(Config{
+		PrivateKey: testKeyPair.private,
+	}, nil)
+	if err != nil {
+		t.Fatalf("NewServiceWithBlacklist() error = %v", err)
+	}
+
+	userID := ids.MustNewUserID()
+	ctx := context.Background()
+
+	// Operations should work without blacklist.
+	token, _ := svc.GenerateAccessToken(userID, enums.UserTypeRider, nil)
+
+	_, err = svc.ValidateToken(ctx, token)
+	if err != nil {
+		t.Fatalf("ValidateToken() should work without blacklist: %v", err)
+	}
+
+	err = svc.RevokeToken(ctx, token)
+	if err != nil {
+		t.Fatalf("RevokeToken() should be no-op without blacklist: %v", err)
+	}
+
+	err = svc.RevokeAllUserTokens(ctx, userID)
+	if err != nil {
+		t.Fatalf("RevokeAllUserTokens() should be no-op without blacklist: %v", err)
 	}
 }

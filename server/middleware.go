@@ -201,3 +201,64 @@ func getRemoteAddr(r *http.Request) string {
 	}
 	return addr
 }
+
+// MetricsCollector is an interface for collecting HTTP request metrics.
+// Implementations can use this to integrate with Prometheus, StatsD, or other
+// metrics systems.
+type MetricsCollector interface {
+	// RecordRequest records metrics for a completed HTTP request.
+	// method: HTTP method (GET, POST, etc.)
+	// path: URL path (may be a pattern like /users/{id})
+	// statusCode: HTTP response status code
+	// duration: Time taken to handle the request
+	RecordRequest(method, path string, statusCode int, duration time.Duration)
+
+	// RecordPanic records when a panic occurs during request handling.
+	RecordPanic(method, path string)
+}
+
+// metricsMiddleware collects request metrics using the provided collector.
+func metricsMiddleware(collector MetricsCollector) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+
+			// Wrap response writer to capture status code.
+			wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+
+			// Handle panics for metrics.
+			defer func() {
+				if rec := recover(); rec != nil {
+					collector.RecordPanic(r.Method, r.URL.Path)
+					panic(rec) // Re-panic to let recovery middleware handle it.
+				}
+			}()
+
+			// Process request.
+			next.ServeHTTP(wrapped, r)
+
+			// Record metrics.
+			collector.RecordRequest(r.Method, r.URL.Path, wrapped.statusCode, time.Since(start))
+		})
+	}
+}
+
+// WithMetrics adds metrics collection to the server middleware chain.
+// The metrics middleware runs after the logging middleware.
+func (s *Server) WithMetrics(collector MetricsCollector) {
+	if collector == nil {
+		return
+	}
+	s.router.Use(metricsMiddleware(collector))
+}
+
+// NoopMetricsCollector is a no-op implementation of MetricsCollector.
+// Use this when metrics collection is not needed.
+type NoopMetricsCollector struct{}
+
+// RecordRequest does nothing.
+func (NoopMetricsCollector) RecordRequest(method, path string, statusCode int, duration time.Duration) {
+}
+
+// RecordPanic does nothing.
+func (NoopMetricsCollector) RecordPanic(method, path string) {}

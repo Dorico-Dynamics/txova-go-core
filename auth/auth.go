@@ -3,6 +3,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
@@ -294,4 +295,123 @@ func ExtractBearerToken(authHeader string) (string, error) {
 	}
 
 	return token, nil
+}
+
+// TokenBlacklist is an interface for token revocation support.
+// Implementations should store revoked token IDs (jti claims) to prevent reuse.
+type TokenBlacklist interface {
+	// IsRevoked checks if a token ID has been revoked.
+	IsRevoked(ctx context.Context, tokenID string) (bool, error)
+	// Revoke adds a token ID to the blacklist.
+	// The expiresAt parameter allows implementations to auto-expire entries.
+	Revoke(ctx context.Context, tokenID string, expiresAt time.Time) error
+	// RevokeAllForUser revokes all tokens for a specific user.
+	// This is useful for password changes or account security events.
+	RevokeAllForUser(ctx context.Context, userID ids.UserID) error
+}
+
+// ServiceWithBlacklist wraps Service with token revocation support.
+type ServiceWithBlacklist struct {
+	*Service
+	blacklist TokenBlacklist
+}
+
+// NewServiceWithBlacklist creates a new authentication service with token revocation.
+func NewServiceWithBlacklist(cfg Config, blacklist TokenBlacklist) (*ServiceWithBlacklist, error) {
+	svc, err := NewService(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &ServiceWithBlacklist{
+		Service:   svc,
+		blacklist: blacklist,
+	}, nil
+}
+
+// ValidateToken validates a JWT token and checks if it has been revoked.
+func (s *ServiceWithBlacklist) ValidateToken(ctx context.Context, tokenString string) (*Claims, error) {
+	claims, err := s.Service.ValidateToken(tokenString)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if token has been revoked.
+	if s.blacklist != nil {
+		revoked, err := s.blacklist.IsRevoked(ctx, claims.ID)
+		if err != nil {
+			return nil, errors.InternalErrorWrap("checking token revocation", err)
+		}
+		if revoked {
+			return nil, errors.TokenInvalid("token has been revoked")
+		}
+	}
+
+	return claims, nil
+}
+
+// ValidateAccessToken validates an access token and checks revocation.
+func (s *ServiceWithBlacklist) ValidateAccessToken(ctx context.Context, tokenString string) (*Claims, error) {
+	claims, err := s.ValidateToken(ctx, tokenString)
+	if err != nil {
+		return nil, err
+	}
+
+	if claims.TokenType != TokenTypeAccess {
+		return nil, errors.TokenInvalid("expected access token")
+	}
+
+	return claims, nil
+}
+
+// ValidateRefreshToken validates a refresh token and checks revocation.
+func (s *ServiceWithBlacklist) ValidateRefreshToken(ctx context.Context, tokenString string) (*Claims, error) {
+	claims, err := s.ValidateToken(ctx, tokenString)
+	if err != nil {
+		return nil, err
+	}
+
+	if claims.TokenType != TokenTypeRefresh {
+		return nil, errors.TokenInvalid("expected refresh token")
+	}
+
+	return claims, nil
+}
+
+// RefreshTokens generates a new token pair and revokes the old refresh token.
+func (s *ServiceWithBlacklist) RefreshTokens(ctx context.Context, refreshTokenString string) (*TokenPair, error) {
+	claims, err := s.ValidateRefreshToken(ctx, refreshTokenString)
+	if err != nil {
+		return nil, err
+	}
+
+	// Revoke the old refresh token.
+	if s.blacklist != nil {
+		if err := s.blacklist.Revoke(ctx, claims.ID, claims.ExpiresAt.Time); err != nil {
+			return nil, errors.InternalErrorWrap("revoking old refresh token", err)
+		}
+	}
+
+	return s.GenerateTokenPair(claims.UserID, claims.UserType, claims.Roles)
+}
+
+// RevokeToken revokes a specific token by its ID.
+func (s *ServiceWithBlacklist) RevokeToken(ctx context.Context, tokenString string) error {
+	claims, err := s.Service.ValidateToken(tokenString)
+	if err != nil {
+		return err
+	}
+
+	if s.blacklist == nil {
+		return nil
+	}
+
+	return s.blacklist.Revoke(ctx, claims.ID, claims.ExpiresAt.Time)
+}
+
+// RevokeAllUserTokens revokes all tokens for a user (e.g., on password change).
+func (s *ServiceWithBlacklist) RevokeAllUserTokens(ctx context.Context, userID ids.UserID) error {
+	if s.blacklist == nil {
+		return nil
+	}
+	return s.blacklist.RevokeAllForUser(ctx, userID)
 }

@@ -701,3 +701,114 @@ func TestItoa(t *testing.T) {
 		})
 	}
 }
+
+// mockMetricsCollector is a test implementation of MetricsCollector.
+type mockMetricsCollector struct {
+	requests []metricsRequest
+	panics   []metricsPanic
+}
+
+type metricsRequest struct {
+	method     string
+	path       string
+	statusCode int
+	duration   time.Duration
+}
+
+type metricsPanic struct {
+	method string
+	path   string
+}
+
+func (m *mockMetricsCollector) RecordRequest(method, path string, statusCode int, duration time.Duration) {
+	m.requests = append(m.requests, metricsRequest{method, path, statusCode, duration})
+}
+
+func (m *mockMetricsCollector) RecordPanic(method, path string) {
+	m.panics = append(m.panics, metricsPanic{method, path})
+}
+
+func TestMetricsMiddleware(t *testing.T) {
+	t.Parallel()
+
+	t.Run("records successful request", func(t *testing.T) {
+		t.Parallel()
+		collector := &mockMetricsCollector{}
+		srv := New(DefaultConfig(), nil)
+		srv.WithMetrics(collector)
+		srv.Router().Get("/test", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("ok"))
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		rec := httptest.NewRecorder()
+		srv.Router().ServeHTTP(rec, req)
+
+		if len(collector.requests) != 1 {
+			t.Fatalf("expected 1 request recorded, got %d", len(collector.requests))
+		}
+
+		recorded := collector.requests[0]
+		if recorded.method != http.MethodGet {
+			t.Errorf("method = %v, want GET", recorded.method)
+		}
+		if recorded.path != "/test" {
+			t.Errorf("path = %v, want /test", recorded.path)
+		}
+		if recorded.statusCode != http.StatusOK {
+			t.Errorf("statusCode = %v, want 200", recorded.statusCode)
+		}
+		if recorded.duration <= 0 {
+			t.Error("duration should be positive")
+		}
+	})
+
+	t.Run("records different status codes", func(t *testing.T) {
+		t.Parallel()
+		collector := &mockMetricsCollector{}
+		srv := New(DefaultConfig(), nil)
+		srv.WithMetrics(collector)
+		srv.Router().Get("/notfound", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/notfound", nil)
+		rec := httptest.NewRecorder()
+		srv.Router().ServeHTTP(rec, req)
+
+		if len(collector.requests) != 1 {
+			t.Fatalf("expected 1 request recorded, got %d", len(collector.requests))
+		}
+
+		if collector.requests[0].statusCode != http.StatusNotFound {
+			t.Errorf("statusCode = %v, want 404", collector.requests[0].statusCode)
+		}
+	})
+
+	t.Run("nil collector is ignored", func(t *testing.T) {
+		t.Parallel()
+		srv := New(DefaultConfig(), nil)
+		srv.WithMetrics(nil) // Should not panic.
+		srv.Router().Get("/test", func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte("ok"))
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		rec := httptest.NewRecorder()
+		srv.Router().ServeHTTP(rec, req) // Should work normally.
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("status = %v, want 200", rec.Code)
+		}
+	})
+}
+
+func TestNoopMetricsCollector(t *testing.T) {
+	t.Parallel()
+
+	// NoopMetricsCollector should not panic.
+	collector := NoopMetricsCollector{}
+	collector.RecordRequest("GET", "/test", 200, time.Second)
+	collector.RecordPanic("GET", "/panic")
+}
