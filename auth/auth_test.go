@@ -466,10 +466,22 @@ func TestExtractBearerToken(t *testing.T) {
 			errContains: "empty",
 		},
 		{
-			name:        "lowercase bearer",
-			header:      "bearer token",
-			wantErr:     true,
-			errContains: "invalid",
+			name:      "lowercase bearer",
+			header:    "bearer token",
+			wantToken: "token",
+			wantErr:   false,
+		},
+		{
+			name:      "uppercase bearer",
+			header:    "BEARER mytoken",
+			wantToken: "mytoken",
+			wantErr:   false,
+		},
+		{
+			name:      "mixed case bearer",
+			header:    "BeArEr mixedtoken",
+			wantToken: "mixedtoken",
+			wantErr:   false,
 		},
 	}
 

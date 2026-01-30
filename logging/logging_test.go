@@ -126,7 +126,7 @@ func TestMaskSensitive(t *testing.T) {
 	}{
 		{"empty", "", ""},
 		{"secret value", "super-secret-password", "[REDACTED]"},
-		{"token", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9", "[REDACTED]"},
+		{"token", "fake-token-placeholder-for-testing", "[REDACTED]"},
 	}
 
 	for _, tt := range tests {

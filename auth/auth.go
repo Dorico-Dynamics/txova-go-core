@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	stderrors "errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Dorico-Dynamics/txova-go-types/enums"
@@ -291,17 +292,18 @@ func GenerateKeyPair(bits int) (*rsa.PrivateKey, *rsa.PublicKey, error) {
 }
 
 // ExtractBearerToken extracts the token from a Bearer authorization header.
+// The scheme comparison is case-insensitive per RFC 7235.
 func ExtractBearerToken(authHeader string) (string, error) {
 	if authHeader == "" {
 		return "", errors.InvalidCredentials("missing authorization header")
 	}
 
-	const prefix = "Bearer "
-	if len(authHeader) < len(prefix) || authHeader[:len(prefix)] != prefix {
+	const scheme = "bearer "
+	if len(authHeader) < len(scheme) || !strings.EqualFold(authHeader[:len(scheme)], scheme) {
 		return "", errors.InvalidCredentials("invalid authorization header format")
 	}
 
-	token := authHeader[len(prefix):]
+	token := strings.TrimSpace(authHeader[len(scheme):])
 	if token == "" {
 		return "", errors.InvalidCredentials("empty token")
 	}
@@ -398,7 +400,11 @@ func (s *ServiceWithBlacklist) RefreshTokens(ctx context.Context, refreshTokenSt
 
 	// Revoke the old refresh token.
 	if s.blacklist != nil {
-		if err := s.blacklist.Revoke(ctx, claims.ID, claims.ExpiresAt.Time); err != nil {
+		var expiresAt time.Time
+		if claims.ExpiresAt != nil {
+			expiresAt = claims.ExpiresAt.Time
+		}
+		if err := s.blacklist.Revoke(ctx, claims.ID, expiresAt); err != nil {
 			return nil, errors.InternalErrorWrap("revoking old refresh token", err)
 		}
 	}
@@ -417,7 +423,11 @@ func (s *ServiceWithBlacklist) RevokeToken(ctx context.Context, tokenString stri
 		return nil
 	}
 
-	return s.blacklist.Revoke(ctx, claims.ID, claims.ExpiresAt.Time)
+	var expiresAt time.Time
+	if claims.ExpiresAt != nil {
+		expiresAt = claims.ExpiresAt.Time
+	}
+	return s.blacklist.Revoke(ctx, claims.ID, expiresAt)
 }
 
 // RevokeAllUserTokens revokes all tokens for a user (e.g., on password change).

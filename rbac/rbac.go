@@ -302,6 +302,11 @@ func (m *Manager) CheckPermission(ctx context.Context, permission Permission) er
 
 // CheckAnyPermission checks if the user has any of the required permissions.
 func (m *Manager) CheckAnyPermission(ctx context.Context, permissions ...Permission) error {
+	if len(permissions) == 0 {
+		m.logDenial(ctx, "", Permission(""), "no permissions specified")
+		return errors.ValidationError("no permissions specified")
+	}
+
 	claims := txcontext.Claims(ctx)
 	if claims.IsZero() {
 		m.logDenial(ctx, "", permissions[0], "no authenticated user")
@@ -318,6 +323,11 @@ func (m *Manager) CheckAnyPermission(ctx context.Context, permissions ...Permiss
 
 // CheckAllPermissions checks if the user has all of the required permissions.
 func (m *Manager) CheckAllPermissions(ctx context.Context, permissions ...Permission) error {
+	if len(permissions) == 0 {
+		m.logDenial(ctx, "", Permission(""), "no permissions specified")
+		return errors.ValidationError("no permissions specified")
+	}
+
 	claims := txcontext.Claims(ctx)
 	if claims.IsZero() {
 		m.logDenial(ctx, "", permissions[0], "no authenticated user")

@@ -389,6 +389,21 @@ func TestManager_CheckAnyPermission(t *testing.T) {
 			t.Fatal("CheckAnyPermission() should fail")
 		}
 	})
+
+	t.Run("empty permissions", func(t *testing.T) {
+		t.Parallel()
+		ctx := txcontext.WithClaims(context.Background(), &txcontext.UserClaims{
+			UserID: ids.MustNewUserID(),
+			Roles:  []string{"rider"},
+		})
+		err := m.CheckAnyPermission(ctx)
+		if err == nil {
+			t.Fatal("CheckAnyPermission() should fail with empty permissions")
+		}
+		if !errors.IsValidationError(err) {
+			t.Errorf("error should be validation error, got: %v", err)
+		}
+	})
 }
 
 func TestManager_CheckAllPermissions(t *testing.T) {
@@ -417,6 +432,21 @@ func TestManager_CheckAllPermissions(t *testing.T) {
 		err := m.CheckAllPermissions(ctx, PermUsersRead, PermConfigRead)
 		if err == nil {
 			t.Fatal("CheckAllPermissions() should fail")
+		}
+	})
+
+	t.Run("empty permissions", func(t *testing.T) {
+		t.Parallel()
+		ctx := txcontext.WithClaims(context.Background(), &txcontext.UserClaims{
+			UserID: ids.MustNewUserID(),
+			Roles:  []string{"rider"},
+		})
+		err := m.CheckAllPermissions(ctx)
+		if err == nil {
+			t.Fatal("CheckAllPermissions() should fail with empty permissions")
+		}
+		if !errors.IsValidationError(err) {
+			t.Errorf("error should be validation error, got: %v", err)
 		}
 	})
 }
