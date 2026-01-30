@@ -1,0 +1,297 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Run Tests and Quality Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.6"
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install dependencies
+        run: |
+          go mod download
+          go mod tidy
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.8.0
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run go fmt check
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "Code is not formatted properly:"
+            gofmt -l .
+            exit 1
+          fi
+
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Check coverage threshold
+        run: |
+          coverage=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "Coverage: ${coverage}%"
+          if (( $(echo "$coverage < 85" | bc -l) )); then
+            echo "Coverage is below 85% threshold"
+            exit 1
+          fi
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.out
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+      - name: Build library
+        run: go build ./...
+
+  version:
+    name: Determine Version
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.semver.outputs.new_version }}
+      version_changed: ${{ steps.semver.outputs.version_changed }}
+      changelog: ${{ steps.changelog.outputs.changelog }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get latest tag
+        id: latest_tag
+        run: |
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          if [ "$latest_tag" = "v0.0.0" ] && ! git rev-parse "v0.0.0" >/dev/null 2>&1; then
+            echo "latest_tag=HEAD" >> $GITHUB_OUTPUT
+            echo "initial_version=true" >> $GITHUB_OUTPUT
+          else
+            echo "latest_tag=${latest_tag}" >> $GITHUB_OUTPUT
+            echo "initial_version=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          if [ "${{ steps.latest_tag.outputs.initial_version }}" = "true" ]; then
+            changelog="Initial release v1.0.0 - txova-go-core foundation library with errors, context, logging, config, auth, rbac, server, and app packages."
+          else
+            changelog=$(git log ${{ steps.latest_tag.outputs.latest_tag }}..HEAD --pretty=format:"- %s%n%b")
+          fi
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$changelog" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Determine version bump
+        id: semver
+        run: |
+          if [ "${{ steps.latest_tag.outputs.initial_version }}" = "true" ]; then
+            echo "new_version=v1.0.0" >> $GITHUB_OUTPUT
+            echo "version_changed=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          latest_version=${{ steps.latest_tag.outputs.latest_tag }}
+          latest_version=${latest_version#v}
+
+          IFS='.' read -r major minor patch <<< "$latest_version"
+
+          # Use %B for full commit message (subject + body) to detect BREAKING CHANGE in body
+          # Use null separator to handle multi-line commit messages
+          commits=$(git log ${{ steps.latest_tag.outputs.latest_tag }}..HEAD --pretty=format:"%B%x00")
+
+          # Determine highest bump level: 0=none, 1=patch, 2=minor, 3=major
+          bump_level=0
+
+          while IFS= read -r -d $'\0' commit; do
+            # Get the first line (subject) for pattern matching
+            subject=$(echo "$commit" | head -n1)
+            # Check for breaking changes using Conventional Commits format:
+            # - "BREAKING CHANGE:" anywhere in full commit message (subject or body)
+            # - "feat!:" or "fix!:" or "type(scope)!:" format in subject
+            breaking_pattern='^[a-z]+(\([^)]+\))?!:'
+            if [[ "$commit" == *"BREAKING CHANGE:"* ]] || [[ "$subject" =~ $breaking_pattern ]]; then
+              bump_level=3
+              break  # Major is highest, no need to continue
+            elif [[ "$subject" == feat:* ]] || [[ "$subject" == feat\(* ]]; then
+              if [ $bump_level -lt 2 ]; then
+                bump_level=2
+              fi
+            elif [[ "$subject" == fix:* ]] || [[ "$subject" == fix\(* ]]; then
+              if [ $bump_level -lt 1 ]; then
+                bump_level=1
+              fi
+            fi
+          done <<< "$commits"
+
+          # Apply version bump based on highest level found
+          version_changed="false"
+          case $bump_level in
+            3)
+              major=$((major + 1))
+              minor=0
+              patch=0
+              version_changed="true"
+              ;;
+            2)
+              minor=$((minor + 1))
+              patch=0
+              version_changed="true"
+              ;;
+            1)
+              patch=$((patch + 1))
+              version_changed="true"
+              ;;
+          esac
+
+          new_version="v${major}.${minor}.${patch}"
+
+          echo "new_version=${new_version}" >> $GITHUB_OUTPUT
+          echo "version_changed=${version_changed}" >> $GITHUB_OUTPUT
+
+  release:
+    name: Create Release
+    needs: [test, version]
+    if: needs.version.outputs.version_changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Release Notes
+        id: release_notes
+        env:
+          CHANGELOG: ${{ needs.version.outputs.changelog }}
+          VERSION: ${{ needs.version.outputs.new_version }}
+          REPO: ${{ github.repository }}
+        run: |
+          cat > release_notes.md << 'NOTES_EOF'
+          ## Changes
+
+          NOTES_EOF
+          echo "${CHANGELOG}" >> release_notes.md
+          cat >> release_notes.md << NOTES_EOF
+
+          ## Installation
+          \`\`\`bash
+          go get github.com/Dorico-Dynamics/txova-go-core@${VERSION}
+          \`\`\`
+
+          ## Packages
+          - **errors**: Standardized error handling with codes and HTTP status mapping
+          - **context**: Request context utilities (request ID, user claims, correlation ID)
+          - **logging**: Structured logging with PII masking
+          - **config**: YAML/env configuration with validation
+          - **auth**: JWT authentication with RS256 signing
+          - **rbac**: Role-based access control
+          - **server**: HTTP server with Chi router and middleware
+          - **app**: Application lifecycle management with health endpoints
+
+          ## Documentation
+          - [pkg.go.dev](https://pkg.go.dev/github.com/Dorico-Dynamics/txova-go-core@${VERSION})
+          NOTES_EOF
+
+      - name: Create Tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          # Use gh CLI to configure git authentication without exposing token in URL
+          gh auth setup-git
+          git tag -a ${{ needs.version.outputs.new_version }} -m "Release ${{ needs.version.outputs.new_version }}"
+          git push origin ${{ needs.version.outputs.new_version }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ needs.version.outputs.new_version }}
+          name: txova-go-core ${{ needs.version.outputs.new_version }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+
+  notify-success:
+    name: Notify Success
+    needs: [release, version]
+    if: needs.version.outputs.version_changed == 'true'
+    uses: ./.github/workflows/notify-slack.yml
+    with:
+      status: SUCCESS
+      version: ${{ needs.version.outputs.new_version }}
+      triggered_by: ${{ github.actor }}
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_TXOVA }}
+
+  notify-failure:
+    name: Notify Failure
+    needs: [test, version, release]
+    if: failure()
+    uses: ./.github/workflows/notify-slack.yml
+    with:
+      status: FAILURE
+      version: ${{ needs.version.outputs.new_version || 'unknown' }}
+      triggered_by: ${{ github.actor }}
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_TXOVA }}
+
+  summary:
+    name: Release Summary
+    needs: [release, version]
+    if: needs.version.outputs.version_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create release summary
+        run: |
+          VERSION="${{ needs.version.outputs.new_version }}"
+          echo "## Release ${VERSION}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Quality Gates Passed" >> $GITHUB_STEP_SUMMARY
+          echo "- Tests passed with 85%+ coverage" >> $GITHUB_STEP_SUMMARY
+          echo "- Code quality verified" >> $GITHUB_STEP_SUMMARY
+          echo "- golangci-lint passed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Installation" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "go get github.com/Dorico-Dynamics/txova-go-core@${VERSION}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Resources" >> $GITHUB_STEP_SUMMARY
+          echo "- [Release Notes](https://github.com/${{ github.repository }}/releases/tag/${VERSION})" >> $GITHUB_STEP_SUMMARY
+          echo "- [Documentation](https://pkg.go.dev/github.com/Dorico-Dynamics/txova-go-core@${VERSION})" >> $GITHUB_STEP_SUMMARY

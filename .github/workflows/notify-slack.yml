@@ -1,0 +1,143 @@
+name: Slack Notification
+
+on:
+  workflow_call:
+    inputs:
+      status:
+        description: "Notification status (STARTED, SUCCESS, FAILURE, CANCELLED)"
+        required: true
+        type: string
+      version:
+        description: "Release version"
+        required: false
+        type: string
+        default: ""
+      triggered_by:
+        description: "User who triggered the workflow"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      SLACK_WEBHOOK_URL:
+        description: "Slack webhook URL for notifications"
+        required: true
+
+jobs:
+  notify:
+    name: Send Slack Notification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check webhook configuration
+        id: check
+        env:
+          WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "::warning::Slack webhook URL not configured, skipping notification"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Sanitize inputs
+        if: steps.check.outputs.skip != 'true'
+        id: sanitize
+        env:
+          RAW_STATUS: ${{ inputs.status }}
+          RAW_VERSION: ${{ inputs.version }}
+          RAW_TRIGGERED_BY: ${{ inputs.triggered_by }}
+        run: |
+          sanitize() {
+            printf '%s' "$1" | jq -Rs '.' | sed 's/^"//;s/"$//'
+          }
+
+          echo "status=$(sanitize "$RAW_STATUS")" >> $GITHUB_OUTPUT
+          echo "version=$(sanitize "$RAW_VERSION")" >> $GITHUB_OUTPUT
+          echo "triggered_by=$(sanitize "$RAW_TRIGGERED_BY")" >> $GITHUB_OUTPUT
+
+      - name: Set notification color and emoji
+        if: steps.check.outputs.skip != 'true'
+        id: format
+        run: |
+          case "${{ steps.sanitize.outputs.status }}" in
+            "STARTED")
+              echo "color=#3498db" >> $GITHUB_OUTPUT
+              echo "emoji=:rocket:" >> $GITHUB_OUTPUT
+              echo "status_text=Started" >> $GITHUB_OUTPUT
+              ;;
+            "SUCCESS")
+              echo "color=#2ecc71" >> $GITHUB_OUTPUT
+              echo "emoji=:white_check_mark:" >> $GITHUB_OUTPUT
+              echo "status_text=Succeeded" >> $GITHUB_OUTPUT
+              ;;
+            "FAILURE")
+              echo "color=#e74c3c" >> $GITHUB_OUTPUT
+              echo "emoji=:x:" >> $GITHUB_OUTPUT
+              echo "status_text=Failed" >> $GITHUB_OUTPUT
+              ;;
+            "CANCELLED")
+              echo "color=#95a5a6" >> $GITHUB_OUTPUT
+              echo "emoji=:no_entry:" >> $GITHUB_OUTPUT
+              echo "status_text=Cancelled" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "color=#7f8c8d" >> $GITHUB_OUTPUT
+              echo "emoji=:grey_question:" >> $GITHUB_OUTPUT
+              echo "status_text=Unknown" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+      - name: Send Slack notification
+        if: steps.check.outputs.skip != 'true'
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "${{ steps.format.outputs.emoji }} txova-go-core Release ${{ steps.format.outputs.status_text }}",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:*\n<https://github.com/${{ github.repository }}|${{ github.repository }}>"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Version:*\n${{ steps.sanitize.outputs.version || 'N/A' }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Triggered By:*\n${{ steps.sanitize.outputs.triggered_by || github.actor }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Workflow:*\n<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+                    }
+                  ]
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "Branch: `${{ github.ref_name }}` | Commit: `${{ github.sha }}`"
+                    }
+                  ]
+                }
+              ],
+              "attachments": [
+                {
+                  "color": "${{ steps.format.outputs.color }}"
+                }
+              ]
+            }
