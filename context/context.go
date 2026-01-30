@@ -5,6 +5,9 @@ package context
 import (
 	"context"
 	"time"
+
+	"github.com/Dorico-Dynamics/txova-go-types/enums"
+	"github.com/Dorico-Dynamics/txova-go-types/ids"
 )
 
 // contextKey is an unexported type for context keys to prevent collisions.
@@ -53,9 +56,9 @@ func WithCorrelationID(ctx context.Context, id string) context.Context {
 // UserClaims represents the authenticated user's claims extracted from a JWT.
 type UserClaims struct {
 	// UserID is the unique identifier of the user (sub claim).
-	UserID string
+	UserID ids.UserID
 	// UserType indicates the type of user (rider, driver, admin).
-	UserType string
+	UserType enums.UserType
 	// Roles contains the user's permission roles.
 	Roles []string
 	// TokenID is the unique identifier of the token (jti claim).
@@ -68,7 +71,7 @@ type UserClaims struct {
 
 // IsZero returns true if the claims are empty/unset.
 func (c UserClaims) IsZero() bool {
-	return c.UserID == ""
+	return c.UserID.IsZero()
 }
 
 // HasRole checks if the user has the specified role.
@@ -119,14 +122,24 @@ func WithClaims(ctx context.Context, claims UserClaims) context.Context {
 }
 
 // UserID retrieves the user ID from the claims in the context.
-// Returns an empty string if no claims are set.
-func UserID(ctx context.Context) string {
+// Returns a zero UserID if no claims are set.
+func UserID(ctx context.Context) ids.UserID {
 	return Claims(ctx).UserID
 }
 
-// UserType retrieves the user type from the claims in the context.
+// UserIDString retrieves the user ID as a string from the claims in the context.
 // Returns an empty string if no claims are set.
-func UserType(ctx context.Context) string {
+func UserIDString(ctx context.Context) string {
+	uid := Claims(ctx).UserID
+	if uid.IsZero() {
+		return ""
+	}
+	return uid.String()
+}
+
+// UserType retrieves the user type from the claims in the context.
+// Returns an empty UserType if no claims are set.
+func UserType(ctx context.Context) enums.UserType {
 	return Claims(ctx).UserType
 }
 

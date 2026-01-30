@@ -4,6 +4,9 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/Dorico-Dynamics/txova-go-types/enums"
+	"github.com/Dorico-Dynamics/txova-go-types/ids"
 )
 
 func TestRequestID(t *testing.T) {
@@ -101,6 +104,8 @@ func TestCorrelationID(t *testing.T) {
 func TestUserClaims_IsZero(t *testing.T) {
 	t.Parallel()
 
+	testUserID := ids.MustNewUserID()
+
 	tests := []struct {
 		name     string
 		claims   UserClaims
@@ -113,7 +118,7 @@ func TestUserClaims_IsZero(t *testing.T) {
 		},
 		{
 			name:     "with user ID",
-			claims:   UserClaims{UserID: "user-123"},
+			claims:   UserClaims{UserID: testUserID},
 			expected: false,
 		},
 		{
@@ -137,7 +142,7 @@ func TestUserClaims_HasRole(t *testing.T) {
 	t.Parallel()
 
 	claims := UserClaims{
-		UserID: "user-123",
+		UserID: ids.MustNewUserID(),
 		Roles:  []string{"rider", "premium"},
 	}
 
@@ -166,7 +171,7 @@ func TestUserClaims_HasAnyRole(t *testing.T) {
 	t.Parallel()
 
 	claims := UserClaims{
-		UserID: "user-123",
+		UserID: ids.MustNewUserID(),
 		Roles:  []string{"rider", "premium"},
 	}
 
@@ -195,7 +200,7 @@ func TestUserClaims_HasAllRoles(t *testing.T) {
 	t.Parallel()
 
 	claims := UserClaims{
-		UserID: "user-123",
+		UserID: ids.MustNewUserID(),
 		Roles:  []string{"rider", "premium", "verified"},
 	}
 
@@ -225,9 +230,10 @@ func TestClaims(t *testing.T) {
 	t.Parallel()
 
 	now := time.Now()
+	testUserID := ids.MustNewUserID()
 	testClaims := UserClaims{
-		UserID:    "user-123",
-		UserType:  "rider",
+		UserID:    testUserID,
+		UserType:  enums.UserTypeRider,
 		Roles:     []string{"rider"},
 		TokenID:   "token-456",
 		IssuedAt:  now,
@@ -278,15 +284,32 @@ func TestClaims(t *testing.T) {
 func TestUserID(t *testing.T) {
 	t.Parallel()
 
+	testUserID := ids.MustNewUserID()
 	ctx := context.Background()
-	claims := UserClaims{UserID: "user-789"}
+	claims := UserClaims{UserID: testUserID}
 	ctxWithClaims := WithClaims(ctx, claims)
 
-	if got := UserID(ctx); got != "" {
-		t.Errorf("UserID(empty ctx) = %v, want empty", got)
+	if got := UserID(ctx); !got.IsZero() {
+		t.Errorf("UserID(empty ctx) = %v, want zero", got)
 	}
-	if got := UserID(ctxWithClaims); got != "user-789" {
-		t.Errorf("UserID(ctx with claims) = %v, want user-789", got)
+	if got := UserID(ctxWithClaims); got != testUserID {
+		t.Errorf("UserID(ctx with claims) = %v, want %v", got, testUserID)
+	}
+}
+
+func TestUserIDString(t *testing.T) {
+	t.Parallel()
+
+	testUserID := ids.MustNewUserID()
+	ctx := context.Background()
+	claims := UserClaims{UserID: testUserID}
+	ctxWithClaims := WithClaims(ctx, claims)
+
+	if got := UserIDString(ctx); got != "" {
+		t.Errorf("UserIDString(empty ctx) = %v, want empty", got)
+	}
+	if got := UserIDString(ctxWithClaims); got != testUserID.String() {
+		t.Errorf("UserIDString(ctx with claims) = %v, want %v", got, testUserID.String())
 	}
 }
 
@@ -294,19 +317,21 @@ func TestUserType(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	claims := UserClaims{UserID: "user-789", UserType: "driver"}
+	claims := UserClaims{UserID: ids.MustNewUserID(), UserType: enums.UserTypeDriver}
 	ctxWithClaims := WithClaims(ctx, claims)
 
 	if got := UserType(ctx); got != "" {
 		t.Errorf("UserType(empty ctx) = %v, want empty", got)
 	}
-	if got := UserType(ctxWithClaims); got != "driver" {
-		t.Errorf("UserType(ctx with claims) = %v, want driver", got)
+	if got := UserType(ctxWithClaims); got != enums.UserTypeDriver {
+		t.Errorf("UserType(ctx with claims) = %v, want %v", got, enums.UserTypeDriver)
 	}
 }
 
 func TestIsAuthenticated(t *testing.T) {
 	t.Parallel()
+
+	testUserID := ids.MustNewUserID()
 
 	tests := []struct {
 		name     string
@@ -330,7 +355,7 @@ func TestIsAuthenticated(t *testing.T) {
 		},
 		{
 			name:     "with valid claims",
-			ctx:      WithClaims(context.Background(), UserClaims{UserID: "user-123"}),
+			ctx:      WithClaims(context.Background(), UserClaims{UserID: testUserID}),
 			expected: true,
 		},
 	}
@@ -417,10 +442,11 @@ func TestHeaderConstants(t *testing.T) {
 func TestContextChaining(t *testing.T) {
 	t.Parallel()
 
+	testUserID := ids.MustNewUserID()
 	ctx := context.Background()
 	ctx = WithRequestID(ctx, "req-123")
 	ctx = WithCorrelationID(ctx, "corr-456")
-	ctx = WithClaims(ctx, UserClaims{UserID: "user-789", UserType: "rider"})
+	ctx = WithClaims(ctx, UserClaims{UserID: testUserID, UserType: enums.UserTypeRider})
 
 	if got := RequestID(ctx); got != "req-123" {
 		t.Errorf("RequestID() = %v, want req-123", got)
@@ -428,11 +454,11 @@ func TestContextChaining(t *testing.T) {
 	if got := CorrelationID(ctx); got != "corr-456" {
 		t.Errorf("CorrelationID() = %v, want corr-456", got)
 	}
-	if got := UserID(ctx); got != "user-789" {
-		t.Errorf("UserID() = %v, want user-789", got)
+	if got := UserID(ctx); got != testUserID {
+		t.Errorf("UserID() = %v, want %v", got, testUserID)
 	}
-	if got := UserType(ctx); got != "rider" {
-		t.Errorf("UserType() = %v, want rider", got)
+	if got := UserType(ctx); got != enums.UserTypeRider {
+		t.Errorf("UserType() = %v, want %v", got, enums.UserTypeRider)
 	}
 }
 
@@ -440,7 +466,7 @@ func TestUserClaimsWithNoRoles(t *testing.T) {
 	t.Parallel()
 
 	claims := UserClaims{
-		UserID: "user-123",
+		UserID: ids.MustNewUserID(),
 		Roles:  nil,
 	}
 

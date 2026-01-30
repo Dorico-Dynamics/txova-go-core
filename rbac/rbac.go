@@ -293,7 +293,7 @@ func (m *Manager) CheckPermission(ctx context.Context, permission Permission) er
 	}
 
 	if !m.RolesHavePermission(claims.Roles, permission) {
-		m.logDenial(ctx, claims.UserID, permission, "insufficient permissions")
+		m.logDenial(ctx, claims.UserID.String(), permission, "insufficient permissions")
 		return errors.Forbidden("permission denied")
 	}
 
@@ -309,7 +309,7 @@ func (m *Manager) CheckAnyPermission(ctx context.Context, permissions ...Permiss
 	}
 
 	if !m.RolesHaveAnyPermission(claims.Roles, permissions...) {
-		m.logDenial(ctx, claims.UserID, permissions[0], "insufficient permissions")
+		m.logDenial(ctx, claims.UserID.String(), permissions[0], "insufficient permissions")
 		return errors.Forbidden("permission denied")
 	}
 
@@ -325,7 +325,7 @@ func (m *Manager) CheckAllPermissions(ctx context.Context, permissions ...Permis
 	}
 
 	if !m.RolesHaveAllPermissions(claims.Roles, permissions...) {
-		m.logDenial(ctx, claims.UserID, permissions[0], "insufficient permissions")
+		m.logDenial(ctx, claims.UserID.String(), permissions[0], "insufficient permissions")
 		return errors.Forbidden("permission denied")
 	}
 
@@ -346,7 +346,7 @@ func (m *Manager) RequireRole(ctx context.Context, role Role) error {
 		}
 	}
 
-	m.logDenial(ctx, claims.UserID, Permission("role:"+role.String()), "role not assigned")
+	m.logDenial(ctx, claims.UserID.String(), Permission("role:"+role.String()), "role not assigned")
 	return errors.Forbidden("permission denied")
 }
 
@@ -365,7 +365,7 @@ func (m *Manager) RequireAnyRole(ctx context.Context, roles ...Role) error {
 		}
 	}
 
-	m.logDenial(ctx, claims.UserID, Permission("role:any"), "required role not assigned")
+	m.logDenial(ctx, claims.UserID.String(), Permission("role:any"), "required role not assigned")
 	return errors.Forbidden("permission denied")
 }
 

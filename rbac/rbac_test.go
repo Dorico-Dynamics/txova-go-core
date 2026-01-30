@@ -6,6 +6,7 @@ import (
 
 	txcontext "github.com/Dorico-Dynamics/txova-go-core/context"
 	"github.com/Dorico-Dynamics/txova-go-core/errors"
+	"github.com/Dorico-Dynamics/txova-go-types/ids"
 )
 
 func TestRole_Valid(t *testing.T) {
@@ -322,7 +323,7 @@ func TestManager_CheckPermission(t *testing.T) {
 	t.Run("authenticated with permission", func(t *testing.T) {
 		t.Parallel()
 		ctx := txcontext.WithClaims(context.Background(), txcontext.UserClaims{
-			UserID: "user-123",
+			UserID: ids.MustNewUserID(),
 			Roles:  []string{"rider"},
 		})
 		err := m.CheckPermission(ctx, PermUsersRead)
@@ -334,7 +335,7 @@ func TestManager_CheckPermission(t *testing.T) {
 	t.Run("authenticated without permission", func(t *testing.T) {
 		t.Parallel()
 		ctx := txcontext.WithClaims(context.Background(), txcontext.UserClaims{
-			UserID: "user-123",
+			UserID: ids.MustNewUserID(),
 			Roles:  []string{"rider"},
 		})
 		err := m.CheckPermission(ctx, PermConfigWrite)
@@ -367,7 +368,7 @@ func TestManager_CheckAnyPermission(t *testing.T) {
 	t.Run("has one of the permissions", func(t *testing.T) {
 		t.Parallel()
 		ctx := txcontext.WithClaims(context.Background(), txcontext.UserClaims{
-			UserID: "user-123",
+			UserID: ids.MustNewUserID(),
 			Roles:  []string{"rider"},
 		})
 		err := m.CheckAnyPermission(ctx, PermConfigWrite, PermUsersRead)
@@ -379,7 +380,7 @@ func TestManager_CheckAnyPermission(t *testing.T) {
 	t.Run("has none of the permissions", func(t *testing.T) {
 		t.Parallel()
 		ctx := txcontext.WithClaims(context.Background(), txcontext.UserClaims{
-			UserID: "user-123",
+			UserID: ids.MustNewUserID(),
 			Roles:  []string{"rider"},
 		})
 		err := m.CheckAnyPermission(ctx, PermConfigWrite, PermConfigRead)
@@ -397,7 +398,7 @@ func TestManager_CheckAllPermissions(t *testing.T) {
 	t.Run("has all permissions", func(t *testing.T) {
 		t.Parallel()
 		ctx := txcontext.WithClaims(context.Background(), txcontext.UserClaims{
-			UserID: "user-123",
+			UserID: ids.MustNewUserID(),
 			Roles:  []string{"rider"},
 		})
 		err := m.CheckAllPermissions(ctx, PermUsersRead, PermRidesRead)
@@ -409,7 +410,7 @@ func TestManager_CheckAllPermissions(t *testing.T) {
 	t.Run("missing one permission", func(t *testing.T) {
 		t.Parallel()
 		ctx := txcontext.WithClaims(context.Background(), txcontext.UserClaims{
-			UserID: "user-123",
+			UserID: ids.MustNewUserID(),
 			Roles:  []string{"rider"},
 		})
 		err := m.CheckAllPermissions(ctx, PermUsersRead, PermConfigRead)
@@ -427,7 +428,7 @@ func TestManager_RequireRole(t *testing.T) {
 	t.Run("has required role", func(t *testing.T) {
 		t.Parallel()
 		ctx := txcontext.WithClaims(context.Background(), txcontext.UserClaims{
-			UserID: "user-123",
+			UserID: ids.MustNewUserID(),
 			Roles:  []string{"rider", "driver"},
 		})
 		err := m.RequireRole(ctx, RoleDriver)
@@ -439,7 +440,7 @@ func TestManager_RequireRole(t *testing.T) {
 	t.Run("missing required role", func(t *testing.T) {
 		t.Parallel()
 		ctx := txcontext.WithClaims(context.Background(), txcontext.UserClaims{
-			UserID: "user-123",
+			UserID: ids.MustNewUserID(),
 			Roles:  []string{"rider"},
 		})
 		err := m.RequireRole(ctx, RoleAdmin)
@@ -466,7 +467,7 @@ func TestManager_RequireAnyRole(t *testing.T) {
 	t.Run("has one of the roles", func(t *testing.T) {
 		t.Parallel()
 		ctx := txcontext.WithClaims(context.Background(), txcontext.UserClaims{
-			UserID: "user-123",
+			UserID: ids.MustNewUserID(),
 			Roles:  []string{"rider"},
 		})
 		err := m.RequireAnyRole(ctx, RoleAdmin, RoleRider)
@@ -478,7 +479,7 @@ func TestManager_RequireAnyRole(t *testing.T) {
 	t.Run("has none of the roles", func(t *testing.T) {
 		t.Parallel()
 		ctx := txcontext.WithClaims(context.Background(), txcontext.UserClaims{
-			UserID: "user-123",
+			UserID: ids.MustNewUserID(),
 			Roles:  []string{"rider"},
 		})
 		err := m.RequireAnyRole(ctx, RoleAdmin, RoleSuperAdmin)
@@ -585,7 +586,7 @@ func TestChecker(t *testing.T) {
 	c := NewChecker(m)
 
 	ctx := txcontext.WithClaims(context.Background(), txcontext.UserClaims{
-		UserID: "user-123",
+		UserID: ids.MustNewUserID(),
 		Roles:  []string{"rider"},
 	})
 

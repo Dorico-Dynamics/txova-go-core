@@ -117,8 +117,8 @@ func (l *Logger) WithContext(ctx context.Context) *Logger {
 	if requestID := txcontext.RequestID(ctx); requestID != "" {
 		attrs = append(attrs, "request_id", requestID)
 	}
-	if userID := txcontext.UserID(ctx); userID != "" {
-		attrs = append(attrs, "user_id", userID)
+	if userID := txcontext.UserID(ctx); !userID.IsZero() {
+		attrs = append(attrs, "user_id", userID.String())
 	}
 	if correlationID := txcontext.CorrelationID(ctx); correlationID != "" {
 		attrs = append(attrs, "correlation_id", correlationID)
