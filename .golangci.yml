@@ -1,0 +1,140 @@
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    # Default linters
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    # Additional linters
+    - bodyclose
+    - copyloopvar
+    - dupl
+    - durationcheck
+    - errname
+    - errorlint
+    - exhaustive
+    - forbidigo
+    - gochecknoinits
+    - goconst
+    - gocritic
+    - gocyclo
+    - godot
+    - gofmt
+    - goimports
+    - goprintffuncname
+    - gosec
+    - intrange
+    - makezero
+    - misspell
+    - nakedret
+    - nestif
+    - nilerr
+    - nilnil
+    - noctx
+    - nolintlint
+    - prealloc
+    - predeclared
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - stylecheck
+    - tenv
+    - testableexamples
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - whitespace
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+
+  errorlint:
+    errorf: true
+    asserts: true
+    comparison: true
+
+  exhaustive:
+    default-signifies-exhaustive: true
+
+  gocyclo:
+    min-complexity: 15
+
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - performance
+      - style
+
+  goimports:
+    local-prefixes: github.com/Dorico-Dynamics/txova-go-core
+
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment
+
+  nakedret:
+    max-func-lines: 30
+
+  nestif:
+    min-complexity: 4
+
+  nolintlint:
+    require-explanation: true
+    require-specific: true
+
+  revive:
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: increment-decrement
+      - name: indent-error-flow
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: var-declaration
+      - name: var-naming
+
+  stylecheck:
+    checks:
+      - all
+
+  unparam:
+    check-exported: true
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - dupl
+        - goconst
+        - gosec
+        - unparam
+
+    - path: _test\.go
+      text: "fieldalignment"
