@@ -41,6 +41,13 @@ var codeHTTPStatus = map[Code]int{
 	CodeServiceUnavailable: http.StatusServiceUnavailable,
 }
 
+// RegisterHTTPStatus registers a mapping from an error code to an HTTP status
+// code. This allows external packages to extend the error code system with
+// their own domain-specific codes. Existing mappings are overwritten.
+func RegisterHTTPStatus(code Code, status int) {
+	codeHTTPStatus[code] = status
+}
+
 // HTTPStatus returns the HTTP status code for the given error code.
 // Returns 500 Internal Server Error if the code is unknown.
 func (c Code) HTTPStatus() int {
